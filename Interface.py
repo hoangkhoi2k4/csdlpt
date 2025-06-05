@@ -4,6 +4,7 @@
 #
 
 import psycopg2
+import os
 
 DATABASE_NAME = 'dds_assgn1'
 
@@ -30,28 +31,29 @@ def loadratings1(ratingstablename, ratingsfilepath, openconnection):
         cur = openconnection.cursor()
         cur.execute("DROP TABLE IF EXISTS " + ratingstablename)
         cur.execute("""
-            CREATE TABLE " + ratingstablename + " (
+            CREATE TABLE """ + ratingstablename + """ (
                 UserID INTEGER,
                 MovieID INTEGER,
                 Rating FLOAT
             )
         """)
 
-        data = []
-        with open(ratingsfilepath, 'r', encoding='utf-8') as file:
-            for line in file:
+        # Tạo file tạm thời với định dạng phù hợp
+        temp_file = 'temp_ratings.dat'
+        with open(ratingsfilepath, 'r', encoding='utf-8') as infile, open(temp_file, 'w', encoding='utf-8') as outfile:
+            for line in infile:
                 parts = line.strip().split('::')
-                if len(parts) != 4:
-                    continue
-                user_id = int(parts[0])
-                movie_id = int(parts[1])
-                rating = float(parts[2])
-                data.append((user_id, movie_id, rating))
+                if len(parts) == 4:
+                    outfile.write(f"{parts[0]}\t{parts[1]}\t{parts[2]}\n")
 
-        insert_query = "INSERT INTO " + ratingstablename + " (UserID, MovieID, Rating) VALUES (%s, %s, %s)"
-        cur.executemany(insert_query, data)
+        # Sử dụng copy_from để nạp dữ liệu
+        with open(temp_file, 'r', encoding='utf-8') as f:
+            cur.copy_from(f, ratingstablename, sep='\t', null='')
         openconnection.commit()
         print("Data loaded successfully into " + ratingstablename)
+
+        # Xóa file tạm thời
+        os.remove(temp_file)
     except psycopg2.Error as e:
         print("Error loading ratings: " + str(e))
         openconnection.rollback()
