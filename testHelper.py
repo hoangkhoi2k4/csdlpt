@@ -51,7 +51,7 @@ def deleteAllPublicTables(openconnection):
 
     cur.close()
 
-def getopenconnection(user='postgres', password='ubuntu', dbname='postgres'):
+def getopenconnection(user='postgres', password='admin', dbname='postgres'):
     return psycopg2.connect("dbname='" + dbname + "' user='" + user + "' host='localhost' password='" + password + "'")
 
 
@@ -196,7 +196,7 @@ def testloadratings(MyAssignment, ratingstablename, filepath, openconnection, ro
     :return:Raises exception if any test fails
     """
     try:
-        MyAssignment.loadratings1(ratingstablename,filepath,openconnection)
+        MyAssignment.loadratings(ratingstablename,filepath,openconnection)
         # Test 1: Count the number of rows inserted
         with openconnection.cursor() as cur:
             cur.execute('SELECT COUNT(*) from {0}'.format(ratingstablename))
