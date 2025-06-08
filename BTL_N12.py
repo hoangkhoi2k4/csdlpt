@@ -38,8 +38,6 @@ def loadratings(ratingstablename, ratingsfilepath, openconnection):
     finally:
         cur.close()
 
-
-
 def rangepartition(ratingstablename, numberofpartitions, openconnection):
     """
     Based on range of ratings, create new partitions from main table (ratings)
@@ -74,8 +72,6 @@ def rangepartition(ratingstablename, numberofpartitions, openconnection):
         openconnection.rollback()
         print(f'Phân mảng ngang theo khoảng thất bại: {str(ex)}')
 
-
-
 def rangeinsert(ratingstablename, userid, movieid, rating, openconnection):
     try:
         cur = openconnection.cursor()
@@ -101,10 +97,44 @@ def rangeinsert(ratingstablename, userid, movieid, rating, openconnection):
 
 
 def roundrobinpartition(ratingstablename, numberofpartitions, openconnection):
-    pass
+    con = openconnection
+    cur = con.cursor()
+    RROBIN_TABLE_PREFIX = 'rrobin_part'
+    for i in range(0, numberofpartitions):
+        table_name = RROBIN_TABLE_PREFIX + str(i)
+        cur.execute("create table " + table_name + " (userid integer, movieid integer, rating float);")
+        cur.execute("insert into " + table_name + " (userid, movieid, rating) select userid, movieid, rating from (select userid, movieid, rating, ROW_NUMBER() over() as rnum from " + ratingstablename + ") as temp where mod(temp.rnum-1, %s) = %s;" % (numberofpartitions, i))
+    cur.close()
+    con.commit()
 
 def roundrobininsert(ratingstablename, userid, itemid, rating, openconnection):
-    pass
+    con = openconnection
+    cur = con.cursor()
+    RROBIN_TABLE_PREFIX = 'rrobin_part'
+    try:
+        # Đếm tổng số bản ghi trong bảng ratings trước khi chèn
+        cur.execute("insert into " + ratingstablename + "(userid, movieid, rating) values (" + str(userid) + "," + str(itemid) + "," + str(rating) + ");")
+        cur.execute("select count(*) from " + ratingstablename + ";");
+        
+        total_rows = (cur.fetchall())[0][0]
+
+        # Lấy số phân mảnh
+        numberofpartitions = count_partitions(RROBIN_TABLE_PREFIX, openconnection)
+        if numberofpartitions == 0:
+            raise Exception("No round-robin partitions found.")
+        
+        # Tính chỉ số bảng đích dựa trên tổng số bản ghi trước khi chèn
+        index = total_rows % numberofpartitions
+        table_name = f"{RROBIN_TABLE_PREFIX}{index}"
+        
+        cur.execute("insert into " + table_name + "(userid, movieid, rating) values (" + str(userid) + "," + str(itemid) + "," + str(rating) + ");")
+        cur.close()
+        con.commit()
+    except psycopg2.Error as error:
+        print("Error while inserting:", error)
+        con.rollback()
+    finally:
+        cur.close()
 
 def drop_and_init_db(dbname, connection):
     """
@@ -130,17 +160,25 @@ def drop_and_init_db(dbname, connection):
         print(f'Kiểm tra/khởi tạo db thất bại: {str(ex)}')
 
 
+def count_partitions(prefix, openconnection):
+    con = openconnection
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM pg_stat_user_tables WHERE relname LIKE %s;", (prefix + '%',))
+    count = cur.fetchone()[0]
+    cur.close()
+    return count
+
+
 # Test cục bộ
 if __name__ == '__main__':
     db_name = 'dds_assgn1'
     user = 'postgres'
-    password = 'admin'
+    password = '123'
     host = 'localhost'
     port = 5432
     rating_tb_name = 'ratings'
     range_tb_prefix = 'range_part'
     rrobin_tb_prefix = 'rrobin_part'
-
 
     print('Xóa dữ liệu và tạo mới database ...')
     default_connection = psycopg2.connect(database='postgres', user=user, password=password, host=host, port=port)
@@ -166,6 +204,8 @@ if __name__ == '__main__':
             start_time = time.perf_counter()
             rangeinsert('', 1, 122, 5, connection)
             print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
+
+
 
     except Exception as ex:
         print(f'Something went wrong: {str(ex)}')
