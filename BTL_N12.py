@@ -2,8 +2,6 @@ import time
 import psycopg2
 import os
 
-
-
 def loadratings(ratingstablename, ratingsfilepath, openconnection):
     try:
         cur = openconnection.cursor()
@@ -95,7 +93,6 @@ def rangeinsert(ratingstablename, userid, movieid, rating, openconnection):
         openconnection.rollback()
         print(f'Chèn dữ liệu vào phân mảng ngang theo khoảng thất bại: {str(ex)}')
 
-
 def roundrobinpartition(ratingstablename, numberofpartitions, openconnection):
     """
     Based on round-robin distribution, create new partitions from main table (ratings).
@@ -181,7 +178,6 @@ def drop_and_init_db(dbname, connection):
     except Exception as ex: 
         print(f'Kiểm tra/khởi tạo db thất bại: {str(ex)}')
 
-
 def count_partitions(prefix, openconnection):
     con = openconnection
     cur = con.cursor()
@@ -190,44 +186,41 @@ def count_partitions(prefix, openconnection):
     cur.close()
     return count
 
-
 # Test cục bộ
-if __name__ == '__main__':
-    db_name = 'dds_assgn1'
-    user = 'postgres'
-    password = '123'
-    host = 'localhost'
-    port = 5432
-    rating_tb_name = 'ratings'
-    range_tb_prefix = 'range_part'
-    rrobin_tb_prefix = 'rrobin_part'
+# if __name__ == '__main__':
+#     db_name = 'dds_assgn1'
+#     user = 'postgres'
+#     password = 'admin'
+#     host = 'localhost'
+#     port = 5432
+#     rating_tb_name = 'ratings'
+#     range_tb_prefix = 'range_part'
+#     rrobin_tb_prefix = 'rrobin_part'
 
-    print('Xóa dữ liệu và tạo mới database ...')
-    default_connection = psycopg2.connect(database='postgres', user=user, password=password, host=host, port=port)
-    start_time = time.perf_counter()
-    drop_and_init_db(dbname=db_name, connection=default_connection)
-    default_connection.close()
-    print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
+#     print('Xóa dữ liệu và tạo mới database ...')
+#     default_connection = psycopg2.connect(database='postgres', user=user, password=password, host=host, port=port)
+#     start_time = time.perf_counter()
+#     drop_and_init_db(dbname=db_name, connection=default_connection)
+#     default_connection.close()
+#     print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
 
-    try:
-        with psycopg2.connect(database=db_name, user=user, password=password, host=host, port=port) as connection:
+#     try:
+#         with psycopg2.connect(database=db_name, user=user, password=password, host=host, port=port) as connection:
 
-            print('Khởi tạo dữ liệu bảng ratings ...')
-            start_time = time.perf_counter()
-            loadratings(rating_tb_name, 'ratings.dat', connection)
-            print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
+#             print('Khởi tạo dữ liệu bảng ratings ...')
+#             start_time = time.perf_counter()
+#             loadratings(rating_tb_name, 'ratings.dat', connection)
+#             print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
 
-            print('Phân mảnh ngang theo khoảng ...')
-            start_time = time.perf_counter()
-            rangepartition(rating_tb_name, 5, connection)
-            print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
+#             print('Phân mảnh ngang theo khoảng ...')
+#             start_time = time.perf_counter()
+#             roundrobinpartition(rating_tb_name, 5, connection)
+#             print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
 
-            print('Chèn dữ liệu vào phân mảnh ngang theo khoảng ...')
-            start_time = time.perf_counter()
-            rangeinsert('', 1, 122, 5, connection)
-            print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
+#             print('Chèn dữ liệu vào phân mảnh ngang theo khoảng ...')
+#             start_time = time.perf_counter()
+#             roundrobininsert('', 1, 122, 5, connection)
+#             print(f"Thời gian thực thi: {time.perf_counter() - start_time:.3f}s\n")
 
-
-
-    except Exception as ex:
-        print(f'Something went wrong: {str(ex)}')
+#     except Exception as ex:
+#         print(f'Something went wrong: {str(ex)}')
