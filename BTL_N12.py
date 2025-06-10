@@ -97,44 +97,66 @@ def rangeinsert(ratingstablename, userid, movieid, rating, openconnection):
 
 
 def roundrobinpartition(ratingstablename, numberofpartitions, openconnection):
-    con = openconnection
-    cur = con.cursor()
-    RROBIN_TABLE_PREFIX = 'rrobin_part'
-    for i in range(0, numberofpartitions):
-        table_name = RROBIN_TABLE_PREFIX + str(i)
-        cur.execute("create table " + table_name + " (userid integer, movieid integer, rating float);")
-        cur.execute("insert into " + table_name + " (userid, movieid, rating) select userid, movieid, rating from (select userid, movieid, rating, ROW_NUMBER() over() as rnum from " + ratingstablename + ") as temp where mod(temp.rnum-1, %s) = %s;" % (numberofpartitions, i))
-    cur.close()
-    con.commit()
-
-def roundrobininsert(ratingstablename, userid, itemid, rating, openconnection):
-    con = openconnection
-    cur = con.cursor()
-    RROBIN_TABLE_PREFIX = 'rrobin_part'
+    """
+    Based on round-robin distribution, create new partitions from main table (ratings).
+    """
     try:
-        # Đếm tổng số bản ghi trong bảng ratings trước khi chèn
-        cur.execute("insert into " + ratingstablename + "(userid, movieid, rating) values (" + str(userid) + "," + str(itemid) + "," + str(rating) + ");")
-        cur.execute("select count(*) from " + ratingstablename + ";");
-        
-        total_rows = (cur.fetchall())[0][0]
+        cur = openconnection.cursor()
+        prefix = 'rrobin_part'
 
-        # Lấy số phân mảnh
-        numberofpartitions = count_partitions(RROBIN_TABLE_PREFIX, openconnection)
-        if numberofpartitions == 0:
-            raise Exception("No round-robin partitions found.")
-        
-        # Tính chỉ số bảng đích dựa trên tổng số bản ghi trước khi chèn
-        index = total_rows % numberofpartitions
-        table_name = f"{RROBIN_TABLE_PREFIX}{index}"
-        
-        cur.execute("insert into " + table_name + "(userid, movieid, rating) values (" + str(userid) + "," + str(itemid) + "," + str(rating) + ");")
+        # Tạo và điền dữ liệu vào các bảng phân mảnh
+        for i in range(numberofpartitions):
+            tb_name = f'{prefix}{i}'
+            cur.execute(f"""
+                CREATE TABLE {tb_name} AS
+                SELECT userid, movieid, rating
+                FROM (
+                    SELECT userid, movieid, rating,
+                           ROW_NUMBER() OVER () - 1 AS rnum
+                    FROM {ratingstablename}
+                ) AS temp
+                WHERE MOD(rnum, {numberofpartitions}) = {i}
+            """)
         cur.close()
-        con.commit()
-    except psycopg2.Error as error:
-        print("Error while inserting:", error)
-        con.rollback()
-    finally:
+        openconnection.commit()
+        print(f"Phân mảnh round-robin hoàn thành với {numberofpartitions} bảng.")
+    except Exception as ex:
+        openconnection.rollback()
+        print(f'Phân mảng ngang theo round-robin thất bại: {str(ex)}')
+
+def roundrobininsert(ratingstablename, userid, movieid, rating, openconnection):
+    """
+    Insert a new record into the appropriate round-robin partition table.
+    """
+    try:
+        cur = openconnection.cursor()
+        prefix = 'rrobin_part'
+
+        # Đếm số lượng bảng phân mảnh
+        cur.execute("SELECT COUNT(*) FROM pg_stat_user_tables WHERE relname LIKE %s", (f'{prefix}%',))
+        number_of_partitions = cur.fetchone()[0]
+        if number_of_partitions == 0:
+            raise Exception("Không tìm thấy bảng phân mảnh round-robin.")
+
+        # Xác định bảng đích dựa trên tổng số bản ghi hiện tại
+        cur.execute("insert into " + ratingstablename + "(userid, movieid, rating) values (" + str(userid) + "," + str(movieid) + "," + str(rating) + ");")
+        cur.execute("SELECT COUNT (*) FROM " + ratingstablename + ";");
+        total_rows = (cur.fetchall())[0][0];
+        partition_index = (total_rows - 1) % number_of_partitions
+        tb_name = f'{prefix}{partition_index}'
+
+        # Chèn dữ liệu vào bảng phân mảnh
+        cur.execute(f"""
+            INSERT INTO {tb_name} (userid, movieid, rating)
+            VALUES (%s, %s, %s)
+        """, (userid, movieid, rating))
+
         cur.close()
+        openconnection.commit()
+        print(f"Chèn dữ liệu vào {tb_name} thành công.")
+    except Exception as ex:
+        openconnection.rollback()
+        print(f'Chèn dữ liệu vào phân mảng ngang theo round-robin thất bại: {str(ex)}')
 
 def drop_and_init_db(dbname, connection):
     """

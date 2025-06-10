@@ -1,7 +1,7 @@
 #
 # Tester for the assignement1
 #
-DATABASE_NAME = 'dds_assgn1'
+DATABASE_NAME = 'postgres'
 
 # TODO: Change these as per your code
 RATINGS_TABLE = 'ratings'
@@ -47,17 +47,18 @@ if __name__ == '__main__':
             else:
                 print("rangeinsert function fail!")
 
-            testHelper.deleteAllPublicTables(conn)
+            # testHelper.deleteAllPublicTables(conn)
             MyAssignment.loadratings(RATINGS_TABLE, INPUT_FILE_PATH, conn)
+
 
             [result, e] = testHelper.testroundrobinpartition(MyAssignment, RATINGS_TABLE, 5, conn, 0, ACTUAL_ROWS_IN_INPUT_FILE)
             if result :
                 print("roundrobinpartition function pass!")
             else:
                 print("roundrobinpartition function fail")
-
+                
             # ALERT:: Change the partition index according to your testing sequence.
-            [result, e] = testHelper.testroundrobininsert(MyAssignment, RATINGS_TABLE, 100, 1, 3, conn, '0')
+            [result, e] = testHelper.testroundrobininsert(MyAssignment, RATINGS_TABLE, 100, 1, 3, conn, '4')
             # [result, e] = testHelper.testroundrobininsert(MyAssignment, RATINGS_TABLE, 100, 1, 3, conn, '1')
             # [result, e] = testHelper.testroundrobininsert(MyAssignment, RATINGS_TABLE, 100, 1, 3, conn, '2')
             if result :
