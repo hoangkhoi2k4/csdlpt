@@ -139,9 +139,12 @@ def roundrobininsert(ratingstablename, userid, movieid, rating, openconnection):
             raise Exception("Không tìm thấy bảng phân mảnh round-robin.")
 
         # Xác định bảng đích dựa trên userid
-        partition_index = userid % number_of_partitions
-        tb_name = f'{prefix}{partition_index}'
         
+        cur.execute("SELECT COUNT (*) FROM " + ratingstablename + ";");
+        total_rows = (cur.fetchall())[0][0];
+        partition_index = (total_rows ) % number_of_partitions
+        tb_name = f'{prefix}{partition_index}'
+
         # Chèn dữ liệu vào bảng phân mảnh
         cur.execute(f"""
             INSERT INTO {tb_name} (userid, movieid, rating)
